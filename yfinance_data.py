@@ -22,6 +22,11 @@ class Yfinance:
         earnings = self.stock.calendar
         return earnings
     
+    def stock_news(self):
+        news = self.stock.news
+        return news
+
+    
 
     
 
