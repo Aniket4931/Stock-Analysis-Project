@@ -105,8 +105,17 @@ def stock(n_clicks, value, radio_value, period):
                 ])
             ])
         ])
+
+        news=yf_data.stock_news()
+        news_table = html.Div([
+            html.H3("News", style={'textAlign': 'center'}),
+            html.Ul(
+                [html.Li(news_item['title'])
+                  for news_item in news])
+        ])
         
-        return [info_table, data_table, earnings_table]
+        
+        return [info_table, data_table, earnings_table,news_table]
 
 
 if __name__ == '__main__':
