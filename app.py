@@ -41,7 +41,7 @@ app.layout = html.Div([
                     {'label':'5Y','value':'5y'},
                     {'label':'Max','value':'Max'},
                 ],
-                value='1D',
+                value='1mo',
                 style={'width': '80px'} 
             ),
             html.Label("Interval time:", style={'color': 'white','margin-left': '10px', 'font-size': '20px'}),
@@ -110,9 +110,8 @@ def Candle_chart(data, stock_name, rangebreaks):
     title_html = stock_name
     company_logo_url = f"https://logo.clearbit.com/{stock_name}.com"
 
+    data = Talib.calculate_moving_averages(data)
 
-    rsi = RSI(data['Close'], timeperiod=14)  
-    
     candle_trace = go.Candlestick(
         x=data.index,
         open=data['Open'],
@@ -122,8 +121,31 @@ def Candle_chart(data, stock_name, rangebreaks):
         name='Candlestick'
     )
 
+    short_ma_trace = go.Scatter(
+        x=data.index,
+        y=data['Short MA'],
+        mode='lines',
+        name='Short MA(50days)',
+        line=dict(color='blue')
+    )
 
-    fig = go.Figure(data=[candle_trace])
+    medium_ma_trace = go.Scatter(
+        x=data.index,
+        y=data['Medium MA'],
+        mode='lines',
+        name='Medium MA(100days)',
+        line=dict(color='green')
+    )
+
+    long_ma_trace = go.Scatter(
+        x=data.index,
+        y=data['Long MA'],
+        mode='lines',
+        name='Long MA(200days)',
+        line=dict(color='red')
+    )
+
+    fig = go.Figure(data=[candle_trace, short_ma_trace, medium_ma_trace, long_ma_trace])
 
     fig.update_layout(
         xaxis={
@@ -200,7 +222,19 @@ def sub_plot(data, stock_name, rangebreaks):
 )
 
 
-def Rsi(data, stock_name, rangebreaks):
+def Rsi( stock_name, rangebreaks,yf_data,period,interval_time):
+    if period=="1D":
+        period="1y"
+    elif period=='5D':
+        period="1y"
+    elif period=="1mo":
+        period="1y"
+    elif period=="3mo":
+        period="1y"
+    elif period=="6mo":
+        period="1y"
+    
+    data = yf_data.fetch_stock_data(period=period, interval=interval_time)
     rsi = Talib.calculate_rsi(data)
     
     rsi_trace = go.Scatter(
@@ -246,7 +280,19 @@ def Rsi(data, stock_name, rangebreaks):
             dcc.Graph(id='data-chart', figure=fig)
         ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center'})
     )
-def macd(data, stock_name, rangebreaks):
+def macd( stock_name, rangebreaks,period,interval_time,yf_data):
+    if period=="1D":
+        period="1y"
+    elif period=='5D':
+        period="1y"
+    elif period=="1mo":
+        period="1y"
+    elif period=="3mo":
+        period="1y"
+    elif period=="6mo":
+        period="1y"
+    data = yf_data.fetch_stock_data(period=period, interval=interval_time)
+
     data = Talib.calculate_macd(data)
 
     macd_trace = go.Scatter(
@@ -307,9 +353,22 @@ def macd(data, stock_name, rangebreaks):
     )
 
 
-def dmi_adx(data, stock_name, rangebreaks):
-    Talib.calculate_dmi_and_adx(data)
+def dmi_adx( stock_name, rangebreaks,period,interval_time,yf_data):
+    if period=="1D":
+        period="6mo"
+    elif period=='5D':
+        period="6mo"
+    elif period=="1mo":
+        period="14mo"
+    elif period=="3mo":
+        period="1y"
+    elif period=="6mo":
+        period="1y"
 
+
+
+    data = yf_data.fetch_stock_data(period=period, interval=interval_time)
+    Talib.calculate_dmi_and_adx(data)
     plus_di_trace = go.Scatter(
         x=data.index,
         y=data['Plus DI'],
@@ -369,7 +428,18 @@ def dmi_adx(data, stock_name, rangebreaks):
         ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center','border': '1px solid white'})
     )
 
-def Atr(data, stock_name, rangebreaks):
+def Atr(stock_name, rangebreaks,period,interval_time,yf_data):
+    if period=="1D":
+        period="6mo"
+    elif period=='5D':
+        period="6mo"
+    elif period=="1mo":
+        period="1y"
+    elif period=="3mo":
+        period="1y"
+    elif period=="6mo":
+        period="1y"
+    data = yf_data.fetch_stock_data(period=period, interval=interval_time)
     data = Talib.calculate_atr(data)
     
     atr_trace = go.Scatter(
@@ -414,7 +484,18 @@ def Atr(data, stock_name, rangebreaks):
     )
     
 
-def Roc(data, stock_name, rangebreaks):
+def Roc(stock_name, rangebreaks,period,interval_time,yf_data):
+    if period=="1D":
+        period="6mo"
+    elif period=='5D':
+        period="6mo"
+    elif period=="1mo":
+        period="1y"
+    elif period=="3mo":
+        period="1y"
+    elif period=="6mo":
+        period="1y"
+    data = yf_data.fetch_stock_data(period=period, interval=interval_time)
     data = Talib.calculate_roc(data)
     
     roc_trace = go.Scatter(
@@ -478,6 +559,7 @@ def create_earnings_table(earnings_data):
     ])
     return earnings_table
 
+    
 
 def create_news_table(news_data):
     news_table = html.Div([
@@ -486,8 +568,10 @@ def create_news_table(news_data):
             [html.Li(news_item['title'], style={'color': 'white'}) for news_item in news_data]
         )
     ])
-    return news_table
-
+    return html.Div(
+        html.Div([news_table
+        ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center','border': '1px solid white'})
+    )
 
 @app.callback(
     Output('output-container-button', 'children'),
@@ -505,28 +589,52 @@ def stock(n_clicks, value, radio_value, period, interval_time):
 
         stock_name = full_stock_name[:-3]
         
-        historical_data = yf.download(full_stock_name, period='1d')
-        live_price = historical_data['Close'].iloc[-1]
+        #Price
+        historical_data = yf.download(full_stock_name, period='2d')  
+        yesterday_close = historical_data['Close'].iloc[-2]  
+        today_close = historical_data['Close'].iloc[-1] 
+        
+        if today_close > yesterday_close:
+            color = 'green'
+        elif today_close < yesterday_close:
+            color = 'red'
+        else:
+            color = 'white' 
+        
+        percentage_change = ((today_close - yesterday_close) / yesterday_close) * 100
+        
+        if percentage_change > 0:
+            change_text = f"+{percentage_change:.2f}%"
+        elif percentage_change < 0:
+            change_text = f"{percentage_change:.2f}%"
+        else:
+            change_text = "No change"
+        
+        live_price_text = html.Div(f'Price: {today_close} ({change_text})', style={'color': color, 'text-align': 'center', 'font-size': '24px'})
+
+        
+        
 
         data = yf_data.fetch_stock_data(period=period, interval=interval_time)
         rangebreaks = get_range_breaks(data)
 
-        candle_chart = Candle_chart(data, stock_name, rangebreaks)
+        candle_chart = Candle_chart(data,stock_name, rangebreaks)
         stock_info = display_stock_info(info, yf_data)  
 
         Sub_plot = sub_plot(data, stock_name, rangebreaks)
-        rsi = Rsi(data, stock_name, rangebreaks)
-        Mcd = macd(data, stock_name, rangebreaks)
-        Rock = Roc(data, stock_name, rangebreaks)
+        rsi = Rsi(stock_name, rangebreaks,yf_data,period,interval_time)
+        Mcd = macd(stock_name, rangebreaks,period,interval_time,yf_data)
+        Rock = Roc(stock_name, rangebreaks,period,interval_time,yf_data)
         earnings = yf_data.stock_earning_date() 
         earnings_table = create_earnings_table(earnings)
 
-        Dmi_Adx = dmi_adx(data, stock_name, rangebreaks)  
-        atr = Atr(data, stock_name, rangebreaks)  
+        Dmi_Adx = dmi_adx(stock_name, rangebreaks,period,interval_time,yf_data)  
+        atr = Atr(stock_name, rangebreaks,period,interval_time,yf_data)  
         news = yf_data.stock_news()
         news_table = create_news_table(news)
 
-        return html.Div(f'Price: {live_price}', style={'color': 'white', 'text-align': 'center', 'font-size': '24px'}),stock_info,  candle_chart, Sub_plot, rsi, Mcd, Dmi_Adx, atr, Rock, earnings_table, news_table
+        return html.Div([live_price_text,percentage_change,stock_info,  candle_chart, Sub_plot, rsi, Mcd, Dmi_Adx, atr, Rock,  news_table])
+
 
 def get_range_breaks(data):
     date_series = pd.Series(data.index)
