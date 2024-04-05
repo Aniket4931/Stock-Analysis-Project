@@ -126,7 +126,6 @@ def display_stock_info(info, yf_data, period,full_stock_name):
     next_earning_dates = earning_date_info.get('Earnings Date', [])
     next_earning_date_str = ', '.join([str(date) for date in next_earning_dates]) if next_earning_dates else 'Not available'
 
-    # Calculate return percentage
     historical_data = yf.download(full_stock_name, period=period)
     if not historical_data.empty:
         first_close = historical_data['Close'].iloc[0]
@@ -135,7 +134,6 @@ def display_stock_info(info, yf_data, period,full_stock_name):
     else:
         return_percentage = 0
 
-    # Determine color based on the sign of the return percentage
     if return_percentage < 0:
         return_color = 'red'
     else:
