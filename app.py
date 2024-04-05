@@ -1,3 +1,5 @@
+from asyncio import Event
+import datetime
 from dash import Dash, html, dcc, Input, Output, State
 from yfinance_data import Yfinance
 import pandas as pd
@@ -6,11 +8,12 @@ from talib import RSI
 from ta_lib_utility import Talib
 import plotly.subplots as sp
 import yfinance as yf
+from plotly.subplots import make_subplots
+from candles import candle_patterns
 
 app = Dash(__name__)
 
 app.layout = html.Div([
-
     html.Div([
         dcc.RadioItems(
             id='radio-items',
@@ -57,20 +60,54 @@ app.layout = html.Div([
                 style={'marginRight': '10px','width': '100px','marginLeft':'5px'} 
             ),
             dcc.Input(
-                value='', placeholder='Enter Stock Name', type='text', id='text-input', style={'marginRight': '10px','marginLeft':'10px'}
+                value='', placeholder=' Enter Stock Name', type='text', id='text-input', style={'marginRight': '10px','marginLeft':'10px','borderRadius': '10px'}
             ),
-            html.Button('Submit', id='submit-val')
-        ], 
+             
+    html.Button('Submit', id='submit-val', style={'border-radius': '10px', 'padding': '10px 20px'})
+            ], 
         style={'display': 'flex', 'justifyContent': 'center', 'paddingTop': '20px','paddingBottom': '20px'}
     ),
-    
+   html.Div(
+    children=[
+        html.Label("Short MA (days):", style={'color': 'white'}),
+        dcc.Input(
+            id='short-ma-input',
+            type='number',
+            value=50,  
+            style={'margin-right': '10px', 'width': '80px'}
+        ),
+        html.Label("Medium MA (days):", style={'color': 'white'}),
+        dcc.Input(
+            id='medium-ma-input',
+            type='number',
+            value=100,  
+            style={'margin-right': '10px', 'width': '80px'}
+        ),
+        html.Label("Long MA (days):", style={'color': 'white'}),
+        dcc.Input(
+            id='long-ma-input',
+            type='number',
+            value=200,  
+            style={'margin-right': '10px', 'width': '80px'}
+        ),
+    ],
+    style={'textAlign': 'center', 'color': 'white', 'margin-top': '20px','paddingBottom': '20px'}
+),
+     dcc.Interval(
+            id="interval-component",
+            interval=10000,  
+            n_intervals=0,
+        ),
+
     html.Div(id='output-container-button'),
     
 ],
     style={'backgroundColor': '#000000'}  
 )
 
-def display_stock_info(info, yf_data):
+
+
+def display_stock_info(info, yf_data, period,full_stock_name):
     company_name = info.get('shortName', '')
     market_cap = info.get('marketCap', '')
     market_cap_suffixes = {
@@ -89,6 +126,21 @@ def display_stock_info(info, yf_data):
     next_earning_dates = earning_date_info.get('Earnings Date', [])
     next_earning_date_str = ', '.join([str(date) for date in next_earning_dates]) if next_earning_dates else 'Not available'
 
+    # Calculate return percentage
+    historical_data = yf.download(full_stock_name, period=period)
+    if not historical_data.empty:
+        first_close = historical_data['Close'].iloc[0]
+        last_close = historical_data['Close'].iloc[-1]
+        return_percentage = ((last_close - first_close) / first_close) * 100
+    else:
+        return_percentage = 0
+
+    # Determine color based on the sign of the return percentage
+    if return_percentage < 0:
+        return_color = 'red'
+    else:
+        return_color = 'green'
+
     stock_info = html.Div([
         html.Table(
             [
@@ -96,6 +148,8 @@ def display_stock_info(info, yf_data):
                 html.Tr([html.Td(html.Strong("Market Cap: "), style={'color': 'white', 'textAlign': 'start'}), html.Td(f"{formatted_market_cap} {stock_currency}", style={'color': 'white', 'textAlign': 'start'})]),
                 html.Tr([html.Td(html.Strong("Sector: "), style={'color': 'white', 'textAlign': 'start'}), html.Td(sector, style={'color': 'white', 'textAlign': 'start'})]),
                 html.Tr([html.Td(html.Strong("Next Earning Date:  "), style={'color': 'white', 'textAlign': 'start'}), html.Td(next_earning_date_str, style={'color': 'white', 'textAlign': 'start'})]),
+               html.Tr([html.Td(html.Strong(f"{period} Return: "), style={'color': 'White', 'textAlign': 'center','fontSize': '20px'}), html.Td(f"{return_percentage:.2f}%", style={'color': return_color, 'textAlign': 'start','fontSize': '20px'})]),
+
             ],
             style={'border-collapse': 'collapse', 'margin': 'auto','margin':'10px'}
         )
@@ -106,11 +160,13 @@ def display_stock_info(info, yf_data):
     return stock_info
 
 
-def Candle_chart(data, stock_name, rangebreaks):
+def Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma):
     title_html = stock_name
     company_logo_url = f"https://logo.clearbit.com/{stock_name}.com"
 
-    data = Talib.calculate_moving_averages(data)
+    data = Talib.calculate_moving_averages(data, short_ma, medium_ma, long_ma)
+
+    data = Talib.handle_candle_pattern(data)
 
     candle_trace = go.Candlestick(
         x=data.index,
@@ -125,7 +181,7 @@ def Candle_chart(data, stock_name, rangebreaks):
         x=data.index,
         y=data['Short MA'],
         mode='lines',
-        name='Short MA(50days)',
+        name=f'Short MA({short_ma})',
         line=dict(color='blue')
     )
 
@@ -133,7 +189,7 @@ def Candle_chart(data, stock_name, rangebreaks):
         x=data.index,
         y=data['Medium MA'],
         mode='lines',
-        name='Medium MA(100days)',
+        name=f'Medium MA({medium_ma})',
         line=dict(color='green')
     )
 
@@ -141,36 +197,71 @@ def Candle_chart(data, stock_name, rangebreaks):
         x=data.index,
         y=data['Long MA'],
         mode='lines',
-        name='Long MA(200days)',
+        name=f'Long MA({long_ma})',
         line=dict(color='red')
     )
+    pattern_colors = ['Orange', 'Cyan', 'Fuchsia', 'red', 'SpringGreen', 'yellow', 'Chartreuse', 'magenta']  
+    start_index = 3
+    
+    pattern_traces = []
+    color_index = 0
+    
+    for pattern in data.columns:
+        if pattern.endswith('_result'):
+            pattern_name = pattern[start_index:].replace('_result', '').replace('_', ' ').title()
+            color = pattern_colors[color_index % len(pattern_colors)]
+            pattern_key = pattern[:-len('_result')]  
+            pattern_description = candle_patterns[pattern_key]['description']  
+    
+            pattern_trace = go.Scatter(
+                x=data.index,
+                y=data[pattern],
+                mode='markers',
+                name=pattern_name,
+                marker=dict(
+                    color=color,
+                    size=20,
+                ),
+                opacity=0.8,
+                text=pattern_description, 
+            )
+    
+            pattern_traces.append(pattern_trace)
+            color_index += 1
 
-    fig = go.Figure(data=[candle_trace, short_ma_trace, medium_ma_trace, long_ma_trace])
+
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05)
+
+    fig.add_trace(candle_trace, row=1, col=1)
+    fig.add_trace(short_ma_trace, row=1, col=1)
+    fig.add_trace(medium_ma_trace, row=1, col=1)
+    fig.add_trace(long_ma_trace, row=1, col=1)
+
+    for pattern_trace in pattern_traces:
+        fig.add_trace(pattern_trace, row=2, col=1)
 
     fig.update_layout(
-        xaxis={
-            'title': 'Date',
-            'rangebreaks': rangebreaks,
-            'rangeslider': {'visible': False},
-            'domain': [0, 1]  
-        },
-        yaxis={
-            'title': 'Price',
-            'domain': [0.2, 1]  
-        },
+        xaxis=dict(
+            title=f'<span style="color:{pattern_colors[0]}; font-size: 18px;">&#x2022; Doji </span> <span style="color:{pattern_colors[1]}; font-size: 18px;">&#x2022; Engulfing </span><span style="color:{pattern_colors[2]}; font-size: 18px;">&#x2022; Hammer </span><span style="color:{pattern_colors[3]}; font-size: 18px;">&#x2022; Hanging Man </span><span style="color:{pattern_colors[4]}; font-size: 18px;">&#x2022; Harami </span><span style="color:{pattern_colors[5]}; font-size: 18px;">&#x2022; Inverted Hammer </span><span style="color:{pattern_colors[6]}; font-size: 18px;">&#x2022; Shooting Star</span> ',
+
+            rangebreaks=rangebreaks,
+            rangeslider={'visible': False}
+        ),
+        yaxis=dict(
+            title='Price'
+        ),
         plot_bgcolor='black',
         paper_bgcolor='black',
-        font={'color': '#FFFFFF'},
-        margin={'t': 50, 'b': 50, 'l': 50, 'r': 50},
-        height=550,
+        font=dict(color='#FFFFFF'),
+        height=800,
         width=1300,
-        legend={'orientation': 'h', 'y': 1.1},
+        legend=dict(orientation='h', y=1.1),
         hovermode='x unified',
-        hoverlabel={'bgcolor': '#FFFFFF', 'font': {'color': '#333333'}},
-        template='plotly_dark'
+        hoverlabel=dict(bgcolor='#FFFFFF', font=dict(color='#333333')),
+        template='plotly_dark',
+   
     )
 
-    candle_chart = dcc.Graph(id='data-chart', figure=fig)
     company_logo = html.Img(
         src=company_logo_url, 
         style={
@@ -181,11 +272,13 @@ def Candle_chart(data, stock_name, rangebreaks):
         }
     )
 
-    return html.Div([
+    div = html.Div([
         company_logo,
         html.A(title_html, href=f"https://www.tradingview.com/symbols/{stock_name}", target="_blank", style={'color': 'white', 'text-align': 'center'}),
-        candle_chart
+        dcc.Graph(id='data-chart', figure=fig),
     ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center'})
+    return div
+
 
 def sub_plot(data, stock_name, rangebreaks):
     volume_trace = go.Bar(
@@ -278,8 +371,9 @@ def Rsi( stock_name, rangebreaks,yf_data,period,interval_time):
         html.Div([
             html.H3("RSI", style={'textAlign': 'center', 'color': 'white'}),
             dcc.Graph(id='data-chart', figure=fig)
-        ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center'})
+        ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center','border': '1px solid white'})
     )
+
 def macd( stock_name, rangebreaks,period,interval_time,yf_data):
     if period=="1D":
         period="1y"
@@ -570,7 +664,7 @@ def create_news_table(news_data):
     ])
     return html.Div(
         html.Div([news_table
-        ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center','border': '1px solid white'})
+        ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center'})
     )
 
 @app.callback(
@@ -579,9 +673,14 @@ def create_news_table(news_data):
     [State('text-input', 'value'),
      State('radio-items', 'value'),
      State('period', 'value'),
-     State('interval_time', 'value')]  
+     State('interval_time', 'value'),
+     State('short-ma-input', 'value'),  
+     State('medium-ma-input', 'value'),
+     State('long-ma-input', 'value')
+     ],
+    [Input('interval-component', 'n_intervals')]
 )
-def stock(n_clicks, value, radio_value, period, interval_time):
+def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_ma, long_ma, n_intervals):
     if n_clicks:
         full_stock_name = value + radio_value
         yf_data = Yfinance(full_stock_name)  
@@ -589,51 +688,59 @@ def stock(n_clicks, value, radio_value, period, interval_time):
 
         stock_name = full_stock_name[:-3]
         
-        #Price
-        historical_data = yf.download(full_stock_name, period='2d')  
-        yesterday_close = historical_data['Close'].iloc[-2]  
-        today_close = historical_data['Close'].iloc[-1] 
+        historical_data = yf.download(full_stock_name, period='1mo')  
         
-        if today_close > yesterday_close:
-            color = 'green'
-        elif today_close < yesterday_close:
-            color = 'red'
+        if len(historical_data) >= 2:
+            yesterday_close = historical_data['Close'].iloc[-2]  
+            today_close = historical_data['Close'].iloc[-1] 
+            
+            if today_close > yesterday_close:
+                color = 'green'
+            elif today_close < yesterday_close:
+                color = 'red'
+            else:
+                color = 'white' 
+            
+            percentage_change = ((today_close - yesterday_close) / yesterday_close) * 100
+            
+            if percentage_change > 0:
+                change_text = f"+{percentage_change:.2f}%"
+            elif percentage_change < 0:
+                change_text = f"{percentage_change:.2f}%"
+            else:
+                change_text = "No change"
+            
+            live_price_text = html.Div(f'Price: {today_close} ({change_text})', style={'color': color, 'text-align': 'center', 'font-size': '24px'})
         else:
-            color = 'white' 
-        
-        percentage_change = ((today_close - yesterday_close) / yesterday_close) * 100
-        
-        if percentage_change > 0:
-            change_text = f"+{percentage_change:.2f}%"
-        elif percentage_change < 0:
-            change_text = f"{percentage_change:.2f}%"
-        else:
-            change_text = "No change"
-        
-        live_price_text = html.Div(f'Price: {today_close} ({change_text})', style={'color': color, 'text-align': 'center', 'font-size': '24px'})
-
-        
-        
+            live_price_text = html.Div(f'Price: N/A', style={'color': 'white', 'text-align': 'center', 'font-size': '24px'})
 
         data = yf_data.fetch_stock_data(period=period, interval=interval_time)
         rangebreaks = get_range_breaks(data)
-
-        candle_chart = Candle_chart(data,stock_name, rangebreaks)
-        stock_info = display_stock_info(info, yf_data)  
-
+        candle_chart = Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma)
+        stock_info = display_stock_info(info, yf_data,period,full_stock_name)  
         Sub_plot = sub_plot(data, stock_name, rangebreaks)
-        rsi = Rsi(stock_name, rangebreaks,yf_data,period,interval_time)
-        Mcd = macd(stock_name, rangebreaks,period,interval_time,yf_data)
-        Rock = Roc(stock_name, rangebreaks,period,interval_time,yf_data)
+        rsi = Rsi(stock_name, rangebreaks, yf_data, period, interval_time)
+        Mcd = macd(stock_name, rangebreaks, period, interval_time, yf_data)
+        Rock = Roc(stock_name, rangebreaks, period, interval_time, yf_data)
         earnings = yf_data.stock_earning_date() 
         earnings_table = create_earnings_table(earnings)
-
-        Dmi_Adx = dmi_adx(stock_name, rangebreaks,period,interval_time,yf_data)  
-        atr = Atr(stock_name, rangebreaks,period,interval_time,yf_data)  
+        Dmi_Adx = dmi_adx(stock_name, rangebreaks, period, interval_time, yf_data)  
+        atr = Atr(stock_name, rangebreaks, period, interval_time, yf_data)  
         news = yf_data.stock_news()
         news_table = create_news_table(news)
-
-        return html.Div([live_price_text,percentage_change,stock_info,  candle_chart, Sub_plot, rsi, Mcd, Dmi_Adx, atr, Rock,  news_table])
+        
+        return html.Div([
+            live_price_text,
+            stock_info,
+            candle_chart,
+            Sub_plot,
+            rsi,
+            Mcd,
+            Dmi_Adx,
+            atr,
+            Rock,
+            news_table,
+        ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center'})
 
 
 def get_range_breaks(data):
