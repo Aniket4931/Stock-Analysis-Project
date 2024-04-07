@@ -13,6 +13,15 @@ from candles import candle_patterns
 
 app = Dash(__name__)
 
+start_time = datetime.time(9, 15)
+end_time = datetime.time(15, 30)
+now = datetime.datetime.now().time()
+
+if datetime.datetime.today().weekday() < 5 and start_time <= now <= end_time:
+    interval_time = 10000  
+else:
+    interval_time = 24 * 60 * 60 * 1000 
+    
 app.layout = html.Div([
     html.Div([
         dcc.RadioItems(
@@ -94,10 +103,10 @@ app.layout = html.Div([
     style={'textAlign': 'center', 'color': 'white', 'margin-top': '20px','paddingBottom': '20px'}
 ),
      dcc.Interval(
-            id="interval-component",
-            interval=10000,  
-            n_intervals=0,
-        ),
+        id="interval-component",
+        interval=interval_time,
+        n_intervals=0
+    ),
 
     html.Div(id='output-container-button'),
     
@@ -665,6 +674,7 @@ def create_news_table(news_data):
         ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center'})
     )
 
+
 @app.callback(
     Output('output-container-button', 'children'),
     [Input('submit-val', 'n_clicks')],
@@ -675,70 +685,77 @@ def create_news_table(news_data):
      State('short-ma-input', 'value'),  
      State('medium-ma-input', 'value'),
      State('long-ma-input', 'value')
-     ],
+    ],
     [Input('interval-component', 'n_intervals')]
 )
 def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_ma, long_ma, n_intervals):
-    if n_clicks:
-        full_stock_name = value + radio_value
-        yf_data = Yfinance(full_stock_name)  
-        info = yf_data.stock_info()
+    try:
+        if n_clicks:
+            full_stock_name = value + radio_value
+            yf_data = Yfinance(full_stock_name)  
+            info = yf_data.stock_info()
 
-        stock_name = full_stock_name[:-3]
-        
-        historical_data = yf.download(full_stock_name, period='1mo')  
-        
-        if len(historical_data) >= 2:
-            yesterday_close = historical_data['Close'].iloc[-2]  
-            today_close = historical_data['Close'].iloc[-1] 
-            
-            if today_close > yesterday_close:
-                color = 'green'
-            elif today_close < yesterday_close:
-                color = 'red'
-            else:
-                color = 'white' 
-            
-            percentage_change = ((today_close - yesterday_close) / yesterday_close) * 100
-            
-            if percentage_change > 0:
-                change_text = f"+{percentage_change:.2f}%"
-            elif percentage_change < 0:
-                change_text = f"{percentage_change:.2f}%"
-            else:
-                change_text = "No change"
-            
-            live_price_text = html.Div(f'Price: {today_close} ({change_text})', style={'color': color, 'text-align': 'center', 'font-size': '24px'})
-        else:
-            live_price_text = html.Div(f'Price: N/A', style={'color': 'white', 'text-align': 'center', 'font-size': '24px'})
+            stock_name = full_stock_name[:-3]
 
-        data = yf_data.fetch_stock_data(period=period, interval=interval_time)
-        rangebreaks = get_range_breaks(data)
-        candle_chart = Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma)
-        stock_info = display_stock_info(info, yf_data,period,full_stock_name)  
-        Sub_plot = sub_plot(data, stock_name, rangebreaks)
-        rsi = Rsi(stock_name, rangebreaks, yf_data, period, interval_time)
-        Mcd = macd(stock_name, rangebreaks, period, interval_time, yf_data)
-        Rock = Roc(stock_name, rangebreaks, period, interval_time, yf_data)
-        earnings = yf_data.stock_earning_date() 
-        earnings_table = create_earnings_table(earnings)
-        Dmi_Adx = dmi_adx(stock_name, rangebreaks, period, interval_time, yf_data)  
-        atr = Atr(stock_name, rangebreaks, period, interval_time, yf_data)  
-        news = yf_data.stock_news()
-        news_table = create_news_table(news)
-        
-        return html.Div([
-            live_price_text,
-            stock_info,
-            candle_chart,
-            Sub_plot,
-            rsi,
-            Mcd,
-            Dmi_Adx,
-            atr,
-            Rock,
-            news_table,
-        ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center'})
+            historical_data = yf.download(full_stock_name, period='1mo')  
+
+            if len(historical_data) >= 2:
+                yesterday_close = historical_data['Close'].iloc[-2]  
+                today_close = historical_data['Close'].iloc[-1] 
+
+                if today_close > yesterday_close:
+                    color = 'green'
+                elif today_close < yesterday_close:
+                    color = 'red'
+                else:
+                    color = 'white' 
+
+                percentage_change = ((today_close - yesterday_close) / yesterday_close) * 100
+
+                if percentage_change > 0:
+                    change_text = f"+{percentage_change:.2f}%"
+                elif percentage_change < 0:
+                    change_text = f"{percentage_change:.2f}%"
+                else:
+                    change_text = "No change"
+
+                live_price_text = html.Div(f'Price: {today_close} ({change_text})', style={'color': color, 'text-align': 'center', 'font-size': '24px'})
+            else:
+                live_price_text = html.Div(f'Price: N/A', style={'color': 'white', 'text-align': 'center', 'font-size': '24px'})
+
+            data = yf_data.fetch_stock_data(period=period, interval=interval_time)
+            rangebreaks = get_range_breaks(data)
+            candle_chart = Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma)
+            stock_info = display_stock_info(info, yf_data, period, full_stock_name)  
+            Sub_plot = sub_plot(data, stock_name, rangebreaks)
+            rsi = Rsi(stock_name, rangebreaks, yf_data, period, interval_time)
+            Mcd = macd(stock_name, rangebreaks, period, interval_time, yf_data)
+            Rock = Roc(stock_name, rangebreaks, period, interval_time, yf_data)
+            earnings = yf_data.stock_earning_date() 
+            earnings_table = create_earnings_table(earnings)
+            Dmi_Adx = dmi_adx(stock_name, rangebreaks, period, interval_time, yf_data)  
+            atr = Atr(stock_name, rangebreaks, period, interval_time, yf_data)  
+            news = yf_data.stock_news()
+            news_table = create_news_table(news)
+
+           
+
+            return html.Div([
+                live_price_text,
+                stock_info,
+                candle_chart,
+                Sub_plot,
+                rsi,
+                Mcd,
+                Dmi_Adx,
+                atr,
+                Rock,
+                news_table,
+               
+            ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center'})
+    except Exception as e:
+        error_message = str(e)
+        return html.Div(f"An error occurred: {error_message}")
 
 
 def get_range_breaks(data):
