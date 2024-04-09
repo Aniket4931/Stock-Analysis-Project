@@ -695,8 +695,13 @@ def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_
             yf_data = Yfinance(full_stock_name)  
             info = yf_data.stock_info()
 
-            stock_name = full_stock_name[:-3]
-
+            if full_stock_name[-3:]==".BO":
+                stock_name=full_stock_name[:-3]
+            elif full_stock_name[-3:]==".NS":
+                stock_name=full_stock_name[:-3]
+            else:
+                stock_name=full_stock_name
+                
             historical_data = yf.download(full_stock_name, period='1mo')  
 
             if len(historical_data) >= 2:
