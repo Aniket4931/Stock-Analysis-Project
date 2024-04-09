@@ -116,7 +116,8 @@ app.layout = html.Div([
 
 
 
-def display_stock_info(info, yf_data, period,full_stock_name):
+
+def display_stock_info(info, yf_data, period, full_stock_name):
     company_name = info.get('shortName', '')
     market_cap = info.get('marketCap', '')
     market_cap_suffixes = {
@@ -148,6 +149,8 @@ def display_stock_info(info, yf_data, period,full_stock_name):
     else:
         return_color = 'green'
 
+    company_website = info.get('website', 'Not available')
+
     stock_info = html.Div([
         html.Table(
             [
@@ -155,13 +158,14 @@ def display_stock_info(info, yf_data, period,full_stock_name):
                 html.Tr([html.Td(html.Strong("Market Cap: "), style={'color': 'white', 'textAlign': 'start'}), html.Td(f"{formatted_market_cap} {stock_currency}", style={'color': 'white', 'textAlign': 'start'})]),
                 html.Tr([html.Td(html.Strong("Sector: "), style={'color': 'white', 'textAlign': 'start'}), html.Td(sector, style={'color': 'white', 'textAlign': 'start'})]),
                 html.Tr([html.Td(html.Strong("Next Earning Date:  "), style={'color': 'white', 'textAlign': 'start'}), html.Td(next_earning_date_str, style={'color': 'white', 'textAlign': 'start'})]),
-               html.Tr([html.Td(html.Strong(f"{period} Return: "), style={'color': 'White', 'textAlign': 'center','fontSize': '20px'}), html.Td(f"{return_percentage:.2f}%", style={'color': return_color, 'textAlign': 'start','fontSize': '20px'})]),
+                html.Tr([html.Td(html.Strong("Website:  "), style={'color': 'white', 'textAlign': 'start'}), html.Td(html.A(company_website, href=company_website, target='_blank', style={'color': 'Blue'}), style={'color': 'white', 'textAlign': 'start'})]),
+                html.Tr([html.Td(html.Strong(f"{period} Return: "), style={'color': 'White', 'textAlign': 'start'}), html.Td(f"{return_percentage:.2f}%", style={'color': return_color, 'textAlign': 'start'})]),
 
             ],
             style={'border-collapse': 'collapse', 'margin': 'auto','margin':'10px'}
         )
     ],
-    style={'margin':'10px','marginRight': '1000px'}
+    style={'margin':'10px','marginRight': '900px'}
     )
 
     return stock_info
@@ -640,7 +644,61 @@ def Roc(stock_name, rangebreaks,period,interval_time,yf_data):
         ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center','border': '1px solid white'})
     )
     
+def bollinger_bbdas(data, rangebreaks, period, interval_time, yf_data):
+    if period == "1D":
+        period = "6mo"
+    elif period == '5D':
+        period = "6mo"
+    elif period == "1mo":
+        period = "1y"
+    elif period == "3mo":
+        period = "1y"
+    elif period == "6mo":
+        period = "1y"
 
+    data = yf_data.fetch_stock_data(period=period, interval=interval_time)
+    data = Talib.calculate_bollinger_bands_width(data)
+
+    bb_width_trace = go.Scatter(
+        x=data.index,
+        y=data['BB_Width'],  
+        mode='lines',
+        name='Bollinger Bands Width',
+        line=dict(color='purple'),
+        yaxis='y2'
+    )
+
+    fig = go.Figure(data=[bb_width_trace])
+
+    fig.update_layout(
+        xaxis={
+            'title': 'Date',
+            'rangebreaks': rangebreaks,
+            'rangeslider': {'visible': False},
+            'domain': [0, 1]
+        },
+        yaxis={
+            'title': 'Bollinger Bands Width',
+            'domain': [0.2, 1]
+        },
+        plot_bgcolor='black',
+        paper_bgcolor='black',
+        font={'color': '#FFFFFF'},
+        margin={'t': 50, 'b': 50, 'l': 50, 'r': 50},
+        height=200,
+        width=1300,
+        legend={'orientation': 'h', 'y': 1.1},
+        hovermode='x unified',
+        hoverlabel={'bgcolor': '#FFFFFF', 'font': {'color': '#333333'}},
+        template='plotly_dark'
+    )
+
+    return html.Div(
+        html.Div([
+            html.H3("Bollinger Bands Width", style={'textAlign': 'center', 'color': 'white'}),
+            dcc.Graph(id='data-chart', figure=fig)
+        ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center', 'border': '1px solid white'})
+    )
 
 
 def create_earnings_table(earnings_data):
@@ -674,7 +732,7 @@ def create_news_table(news_data):
         ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center'})
     )
 
-
+    
 @app.callback(
     Output('output-container-button', 'children'),
     [Input('submit-val', 'n_clicks')],
@@ -694,10 +752,14 @@ def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_
             full_stock_name = value + radio_value
             yf_data = Yfinance(full_stock_name)  
             info = yf_data.stock_info()
+            if full_stock_name[-3:]==".BO":
+                stock_name=full_stock_name[:-3]
+            elif full_stock_name[-3:]==".NS":
+                stock_name=full_stock_name[:-3]
+            else:
+                stock_name=full_stock_name
 
-            stock_name = full_stock_name[:-3]
-
-            historical_data = yf.download(full_stock_name, period='1mo')  
+            historical_data = yf.download(full_stock_name, period='2d')  
 
             if len(historical_data) >= 2:
                 yesterday_close = historical_data['Close'].iloc[-2]  
@@ -717,7 +779,7 @@ def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_
                 elif percentage_change < 0:
                     change_text = f"{percentage_change:.2f}%"
                 else:
-                    change_text = "No change"
+                    change_text = "(0%)"
 
                 live_price_text = html.Div(f'Price: {today_close} ({change_text})', style={'color': color, 'text-align': 'center', 'font-size': '24px'})
             else:
@@ -737,6 +799,7 @@ def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_
             atr = Atr(stock_name, rangebreaks, period, interval_time, yf_data)  
             news = yf_data.stock_news()
             news_table = create_news_table(news)
+            boling_=bollinger_bbdas(data, rangebreaks, period, interval_time, yf_data)
 
            
 
@@ -748,6 +811,7 @@ def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_
                 rsi,
                 Mcd,
                 Dmi_Adx,
+                boling_,
                 atr,
                 Rock,
                 news_table,
