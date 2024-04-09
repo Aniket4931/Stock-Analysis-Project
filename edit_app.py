@@ -664,7 +664,7 @@ def create_news_table(news_data):
         ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center'})
     )
 
-
+# Live Stock Price Update 
 def Live_Stock_price(full_stock_name):
     start_time = datetime.time(9, 15)
     end_time = datetime.time(15, 30)
