@@ -14,7 +14,7 @@ from candles import candle_patterns
 app = Dash(__name__)
 
 start_time = datetime.time(9, 15)
-end_time = datetime.time(15, 30)
+end_time = datetime.time(18, 30)
 now = datetime.datetime.now().time()
 
 if datetime.datetime.today().weekday() < 5 and start_time <= now <= end_time:
@@ -107,6 +107,7 @@ app.layout = html.Div([
         interval=interval_time,
         n_intervals=0
     ),
+    html.Label(id="Live_Price"),
 
     html.Div(id='output-container-button'),
     
@@ -744,46 +745,22 @@ def create_news_table(news_data):
      State('medium-ma-input', 'value'),
      State('long-ma-input', 'value')
     ],
-    [Input('interval-component', 'n_intervals')]
 )
-def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_ma, long_ma, n_intervals):
+def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_ma, long_ma):
     try:
         if n_clicks:
             full_stock_name = value + radio_value
             yf_data = Yfinance(full_stock_name)  
             info = yf_data.stock_info()
+
             if full_stock_name[-3:]==".BO":
                 stock_name=full_stock_name[:-3]
             elif full_stock_name[-3:]==".NS":
                 stock_name=full_stock_name[:-3]
             else:
                 stock_name=full_stock_name
-
-            historical_data = yf.download(full_stock_name, period='2d')  
-
-            if len(historical_data) >= 2:
-                yesterday_close = historical_data['Close'].iloc[-2]  
-                today_close = historical_data['Close'].iloc[-1] 
-
-                if today_close > yesterday_close:
-                    color = 'green'
-                elif today_close < yesterday_close:
-                    color = 'red'
-                else:
-                    color = 'white' 
-
-                percentage_change = ((today_close - yesterday_close) / yesterday_close) * 100
-
-                if percentage_change > 0:
-                    change_text = f"+{percentage_change:.2f}%"
-                elif percentage_change < 0:
-                    change_text = f"{percentage_change:.2f}%"
-                else:
-                    change_text = "(0%)"
-
-                live_price_text = html.Div(f'Price: {today_close} ({change_text})', style={'color': color, 'text-align': 'center', 'font-size': '24px'})
-            else:
-                live_price_text = html.Div(f'Price: N/A', style={'color': 'white', 'text-align': 'center', 'font-size': '24px'})
+                
+           
 
             data = yf_data.fetch_stock_data(period=period, interval=interval_time)
             rangebreaks = get_range_breaks(data)
@@ -799,19 +776,16 @@ def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_
             atr = Atr(stock_name, rangebreaks, period, interval_time, yf_data)  
             news = yf_data.stock_news()
             news_table = create_news_table(news)
-            boling_=bollinger_bbdas(data, rangebreaks, period, interval_time, yf_data)
 
            
 
             return html.Div([
-                live_price_text,
                 stock_info,
                 candle_chart,
                 Sub_plot,
                 rsi,
                 Mcd,
                 Dmi_Adx,
-                boling_,
                 atr,
                 Rock,
                 news_table,
@@ -838,6 +812,46 @@ def get_range_breaks(data):
         )
     
     return rangebreaks
+
+@app.callback(
+    Output('Live_Price', 'children'),
+    [Input('submit-val', 'n_clicks')],
+    [Input('interval-component', 'n_intervals')],
+    [State('text-input', 'value'),
+     State('radio-items', 'value')]
+)
+def update_stock_price(n_clicks, n_intervals, value, radio_value):
+    try:
+        full_stock_name = value + radio_value
+        historical_data = yf.download(full_stock_name, period='2d')  
+        if len(historical_data) >= 2:
+            yesterday_close = historical_data['Close'].iloc[-2]  
+            today_close = historical_data['Close'].iloc[-1] 
+
+            if today_close > yesterday_close:
+                color = 'green'
+            elif today_close < yesterday_close:
+                color = 'red'
+            else:
+                color = 'white' 
+
+            percentage_change = ((today_close - yesterday_close) / yesterday_close) * 100
+
+            if percentage_change > 0:
+                change_text = f"+{percentage_change:.2f}%"
+            elif percentage_change < 0:
+                change_text = f"{percentage_change:.2f}%"
+            else:
+                change_text = "(0%)"
+
+            live_price_text = html.Div(f'Price: {today_close} ({change_text})', style={'color': color, 'text-align': 'center', 'font-size': '24px'})
+            return live_price_text
+        else:
+            return html.Div(f'Price: N/A', style={'color': 'white', 'text-align': 'center', 'font-size': '24px'})
+    except Exception as e:
+        error_message = str(e)
+        return html.Div(f"An error occurred: {error_message}")
+
 
 if __name__ == '__main__':
     app.run_server(debug=True)
