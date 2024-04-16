@@ -4,14 +4,25 @@ from dash import Dash, html, dcc, Input, Output, State
 from yfinance_data import Yfinance
 import pandas as pd
 import plotly.graph_objs as go
+from talib import RSI
 from ta_lib_utility import Talib
 import plotly.subplots as sp
 import yfinance as yf
 from plotly.subplots import make_subplots
 from candles import candle_patterns
-
+import requests
+from bs4 import BeautifulSoup
+import time
 app = Dash(__name__)
 
+start_time = datetime.time(9, 15)
+end_time = datetime.time(15, 30)
+now = datetime.datetime.now().time()
+
+if datetime.datetime.today().weekday() < 5 and start_time <= now <= end_time:
+    interval_time = 2000  
+else:
+    interval_time = 24 * 60 * 60 * 1000 
     
 app.layout = html.Div([
     html.Div([
@@ -94,13 +105,45 @@ app.layout = html.Div([
     style={'textAlign': 'center', 'color': 'white', 'margin-top': '20px','paddingBottom': '20px'}
 ),
 
+    dcc.Interval(
+        id="interval-component",
+        interval=interval_time,
+        n_intervals=0
+    ),
+    html.Label(id="live-price-output"),
     html.Div(id='output-container-button'),
-    
-],
-    style={'backgroundColor': '#000000'}  
+
+], style={'backgroundColor': '#000000'})
+
+@app.callback(
+    Output('live-price-output', 'children'),
+    [Input('submit-val', 'n_clicks'),
+     Input('interval-component', 'n_intervals')],
+    [State('text-input', 'value'),
+    State('radio-items', 'value'),
+]
 )
+def update_stock_price(n_clicks, n_intervals, value,radio_value):
+    if ".NS"==radio_value:
+        radio="NSE"
+    elif ".Bo"==radio_value:
+        radio="BOM"
+    else :
+        radio="NASDAQ"
+    try:
+        if n_clicks or n_intervals:
+            url = f'https://www.google.com/finance/quote/{value}:{radio}'
+            response = requests.get(url)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            class1 = "YMlKec fxKbKc"
+            live_price = soup.find(class_=class1).text
+            return html.Div([
+                html.Div(live_price, style={'color': 'Green','textAlign': 'center','font-size': '25px' })
+            ])
+    except Exception as e:
+        return f"Error fetching live price: {str(e)}"
 
-
+        
 
 
 def display_stock_info(info, yf_data, period, full_stock_name):
@@ -144,7 +187,7 @@ def display_stock_info(info, yf_data, period, full_stock_name):
                 html.Tr([html.Td(html.Strong("Market Cap: "), style={'color': 'white', 'textAlign': 'start'}), html.Td(f"{formatted_market_cap} {stock_currency}", style={'color': 'white', 'textAlign': 'start'})]),
                 html.Tr([html.Td(html.Strong("Sector: "), style={'color': 'white', 'textAlign': 'start'}), html.Td(sector, style={'color': 'white', 'textAlign': 'start'})]),
                 html.Tr([html.Td(html.Strong("Next Earning Date:  "), style={'color': 'white', 'textAlign': 'start'}), html.Td(next_earning_date_str, style={'color': 'white', 'textAlign': 'start'})]),
-                html.Tr([html.Td(html.Strong("Website:  "), style={'color': 'white', 'textAlign': 'start'}), html.Td(html.A(company_website, href=company_website, target='_blank', style={'color': 'Blue'}), style={'color': 'white', 'textAlign': 'start'})]),
+                html.Tr([html.Td(html.Strong("Website:  "), style={'color': 'white', 'textAlign': 'start'}), html.Td(html.A(company_website, href=company_website, target='_blank', style={'color': 'White'}), style={'color': 'white', 'textAlign': 'start'})]),
                 html.Tr([html.Td(html.Strong(f"{period} Return: "), style={'color': 'White', 'textAlign': 'start'}), html.Td(f"{return_percentage:.2f}%", style={'color': return_color, 'textAlign': 'start'})]),
 
             ],
@@ -217,7 +260,7 @@ def Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma):
                 name=pattern_name,
                 marker=dict(
                     color=color,
-                    size=20,
+                    size=15,
                 ),
                 opacity=0.8,
                 text=pattern_description, 
@@ -665,43 +708,7 @@ def create_news_table(news_data):
     )
 
 
-def Live_Stock_price(full_stock_name):
-    start_time = datetime.time(9, 15)
-    end_time = datetime.time(15, 30)
-    now = datetime.datetime.now().time()
-
-    if datetime.datetime.today().weekday() < 5 and start_time <= now <= end_time:
-        interval_time = 10000  
-    else:
-        interval_time = 24 * 60 * 60 * 1000  
-
-    live_price_text = html.Div(f'Price: N/A', style={'color': 'white', 'text-align': 'center', 'font-size': '24px'})
-
-    historical_data = yf.download(full_stock_name, period='2d')
-
-    if len(historical_data) >= 2:
-        yesterday_close = historical_data['Close'].iloc[-2]
-        today_close = historical_data['Close'].iloc[-1]
-        if today_close > yesterday_close:
-            color = 'green'
-        elif today_close < yesterday_close:
-            color = 'red'
-        else:
-            color = 'white'
-        percentage_change = ((today_close - yesterday_close) / yesterday_close) * 100
-        if percentage_change > 0:
-            change_text = f"+{percentage_change:.2f}%"
-        elif percentage_change < 0:
-            change_text = f"{percentage_change:.2f}%"
-        else:
-            change_text = "No change"
-        live_price_text = html.Div(f'Price: {today_close} ({change_text})',
-                                   style={'color': color, 'text-align': 'center', 'font-size': '24px'})
-
-    return html.Div([live_price_text, dcc.Interval(id="interval-component", interval=interval_time, n_intervals=0)])
-
-
-
+   
 
 @app.callback(
     Output('output-container-button', 'children'),
@@ -714,8 +721,13 @@ def Live_Stock_price(full_stock_name):
      State('medium-ma-input', 'value'),
      State('long-ma-input', 'value')
     ],
-    
+    # [Input('interval-component', 'n_intervals')]
 )
+
+
+        
+
+
 def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_ma, long_ma):
     try:
         if n_clicks:
@@ -729,7 +741,9 @@ def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_
                 stock_name=full_stock_name[:-3]
             else:
                 stock_name=full_stock_name
+
             
+            # live_Stock_price = live_price(stock_name)
             data = yf_data.fetch_stock_data(period=period, interval=interval_time)
             rangebreaks = get_range_breaks(data)
             candle_chart = Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma)
@@ -744,12 +758,10 @@ def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_
             atr = Atr(stock_name, rangebreaks, period, interval_time, yf_data)  
             news = yf_data.stock_news()
             news_table = create_news_table(news)
-            live_price=Live_Stock_price(full_stock_name)
 
            
 
             return html.Div([
-                live_price,
                 stock_info,
                 candle_chart,
                 Sub_plot,
@@ -759,7 +771,7 @@ def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_
                 atr,
                 Rock,
                 news_table,
-               
+
             ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center'})
     except Exception as e:
         error_message = str(e)
