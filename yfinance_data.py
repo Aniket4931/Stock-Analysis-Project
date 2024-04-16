@@ -1,8 +1,4 @@
-'''1. Init method --> take ticker as input and set yfinance ticker obj in class variable
-2. get_stock_info: Return info for stock
-3. fetch_stock_data(period, interval) --> return data for stock for specific period and interval
-4. get_stock_earning_date --> return earning date for stock
-5. get_stock_news --> return news related to company'''
+
 import yfinance as yf
 
 class Yfinance:
@@ -15,8 +11,9 @@ class Yfinance:
         return info
     
     def fetch_stock_data(self, period, interval):
-        data = self.stock.history(period=period, interval=interval)
+        data = self.stock.history(period=period, interval=interval,rounding=2)
         return data
+
     
     def stock_earning_date(self):
         earnings = self.stock.calendar
