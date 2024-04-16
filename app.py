@@ -1,4 +1,3 @@
-from asyncio import Event
 import datetime
 from dash import Dash, html, dcc, Input, Output, State
 from yfinance_data import Yfinance
@@ -10,15 +9,19 @@ import plotly.subplots as sp
 import yfinance as yf
 from plotly.subplots import make_subplots
 from candles import candle_patterns
+import requests
+from bs4 import BeautifulSoup
+import time
+from stocks_names import stocks_names
 
 app = Dash(__name__)
 
 start_time = datetime.time(9, 15)
-end_time = datetime.time(18, 30)
+end_time = datetime.time(15, 30)
 now = datetime.datetime.now().time()
 
 if datetime.datetime.today().weekday() < 5 and start_time <= now <= end_time:
-    interval_time = 10000  
+    interval_time = 2000  
 else:
     interval_time = 24 * 60 * 60 * 1000 
     
@@ -69,7 +72,16 @@ app.layout = html.Div([
                 style={'marginRight': '10px','width': '100px','marginLeft':'5px'} 
             ),
             dcc.Input(
-                value='', placeholder=' Enter Stock Name', type='text', id='text-input', style={'marginRight': '10px','marginLeft':'10px','borderRadius': '10px'}
+                id='text-input',
+                list='stock-names', 
+                value='', 
+                placeholder='Enter Stock Name', 
+                type='text', 
+                style={'marginRight': '10px','marginLeft':'10px','borderRadius': '10px'}
+            ),
+            html.Datalist(
+                id='stock-names',
+                children=[],
             ),
              
     html.Button('Submit', id='submit-val', style={'border-radius': '10px', 'padding': '10px 20px'})
@@ -99,25 +111,69 @@ app.layout = html.Div([
             value=200,  
             style={'margin-right': '10px', 'width': '80px'}
         ),
+        html.Label("Future LR(days):", style={'color': 'white'}),
+        dcc.Input(
+            id='Linear-input',
+            type='number',
+            value=2,  
+            style={'margin-right': '10px', 'width': '80px'}
+        ),
     ],
     style={'textAlign': 'center', 'color': 'white', 'margin-top': '20px','paddingBottom': '20px'}
 ),
-     dcc.Interval(
+
+    dcc.Interval(
         id="interval-component",
         interval=interval_time,
         n_intervals=0
     ),
-    html.Label(id="Live_Price"),
-
+    html.Label("Price",id="live-price-output"),
     html.Div(id='output-container-button'),
-    
-],
-    style={'backgroundColor': '#000000'}  
+
+], style={'backgroundColor': '#000000'})
+
+@app.callback(
+    Output('stock-names', 'children'),
+    [Input('text-input', 'value')]
+)
+def update_stock_name_suggestions(value):
+    suggestions = [stock for stock in stocks_names if value.lower() in stock.lower()]
+    return [html.Option(value=suggestion) for suggestion in suggestions]
+
+@app.callback(
+    Output('live-price-output', 'children'),
+    [Input('submit-val', 'n_clicks'),
+     Input('interval-component', 'n_intervals')],
+    [State('text-input', 'value'),
+    State('radio-items', 'value'),
+]
 )
 
+# Stock Live Price
+def update_stock_price(n_clicks, n_intervals, value,radio_value):
+    if ".NS"==radio_value:
+        radio="NSE"
+    elif ".Bo"==radio_value:
+        radio="BOM"
+    else :
+        radio="NASDAQ"
+    try:
+        if n_clicks or n_intervals:
+            url = f'https://www.google.com/finance/quote/{value}:{radio}'
+            response = requests.get(url)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            class1 = "YMlKec fxKbKc"
+            live_price = soup.find(class_=class1).text
+            sf="Price "+live_price
+            return html.Div([
+                html.Div(sf, style={'color': 'Green','textAlign': 'center','font-size': '25px' })
+            ])
+    except Exception as e:
+        return f"Error fetching live price: {str(e)}"
 
+        
 
-
+# Stock Information
 def display_stock_info(info, yf_data, period, full_stock_name):
     company_name = info.get('shortName', '')
     market_cap = info.get('marketCap', '')
@@ -159,7 +215,7 @@ def display_stock_info(info, yf_data, period, full_stock_name):
                 html.Tr([html.Td(html.Strong("Market Cap: "), style={'color': 'white', 'textAlign': 'start'}), html.Td(f"{formatted_market_cap} {stock_currency}", style={'color': 'white', 'textAlign': 'start'})]),
                 html.Tr([html.Td(html.Strong("Sector: "), style={'color': 'white', 'textAlign': 'start'}), html.Td(sector, style={'color': 'white', 'textAlign': 'start'})]),
                 html.Tr([html.Td(html.Strong("Next Earning Date:  "), style={'color': 'white', 'textAlign': 'start'}), html.Td(next_earning_date_str, style={'color': 'white', 'textAlign': 'start'})]),
-                html.Tr([html.Td(html.Strong("Website:  "), style={'color': 'white', 'textAlign': 'start'}), html.Td(html.A(company_website, href=company_website, target='_blank', style={'color': 'Blue'}), style={'color': 'white', 'textAlign': 'start'})]),
+                html.Tr([html.Td(html.Strong("Website:  "), style={'color': 'white', 'textAlign': 'start'}), html.Td(html.A(company_website, href=company_website, target='_blank', style={'color': 'White'}), style={'color': 'white', 'textAlign': 'start'})]),
                 html.Tr([html.Td(html.Strong(f"{period} Return: "), style={'color': 'White', 'textAlign': 'start'}), html.Td(f"{return_percentage:.2f}%", style={'color': return_color, 'textAlign': 'start'})]),
 
             ],
@@ -171,14 +227,29 @@ def display_stock_info(info, yf_data, period, full_stock_name):
 
     return stock_info
 
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from datetime import datetime, timedelta
 
-def Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma):
+# Candle Chart , Candle Patterns, Moving averages, Linear Regeression
+def Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma, future_days):
     title_html = stock_name
     company_logo_url = f"https://logo.clearbit.com/{stock_name}.com"
 
     data = Talib.calculate_moving_averages(data, short_ma, medium_ma, long_ma)
-
     data = Talib.handle_candle_pattern(data)
+
+    X = np.arange(len(data)).reshape(-1, 1)
+    y = data['Close'].values.reshape(-1, 1)
+    reg = LinearRegression().fit(X, y)
+    linear_regression_line = reg.predict(X)
+
+    future_X = np.arange(len(data), len(data) + future_days).reshape(-1, 1)
+    future_linear_regression_line = reg.predict(future_X)
+
+    std_dev = data['Close'].rolling(window=20).std()
+    upper_band = linear_regression_line.flatten() + 2 * std_dev
+    lower_band = linear_regression_line.flatten() - 2 * std_dev
 
     candle_trace = go.Candlestick(
         x=data.index,
@@ -212,6 +283,39 @@ def Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma):
         name=f'Long MA({long_ma})',
         line=dict(color='red')
     )
+    
+    linear_regression_trace = go.Scatter(
+        x=data.index,
+        y=linear_regression_line.flatten(),
+        mode='lines',
+        name='Linear Regression',
+        line=dict(color='orange', dash='dash')
+    )
+
+    future_linear_regression_trace = go.Scatter(
+        x=[data.index[-1] + timedelta(days=i) for i in range(1, future_days + 1)],
+        y=future_linear_regression_line.flatten(),
+        mode='lines',
+        name=f'Future Linear Regression ({future_days} days)',
+        line=dict(color='Cyan', dash='dash')
+    )
+
+    upper_band_trace = go.Scatter(
+        x=data.index,
+        y=upper_band,
+        mode='lines',
+        name='Upper Band',
+        line=dict(color='green', dash='dash')
+    )
+
+    lower_band_trace = go.Scatter(
+        x=data.index,
+        y=lower_band,
+        mode='lines',
+        name='Lower Band',
+        line=dict(color='red', dash='dash')
+    )
+
     pattern_colors = ['Orange', 'Cyan', 'Fuchsia', 'red', 'SpringGreen', 'yellow', 'Chartreuse', 'magenta']  
     start_index = 3
     
@@ -232,7 +336,7 @@ def Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma):
                 name=pattern_name,
                 marker=dict(
                     color=color,
-                    size=20,
+                    size=15,
                 ),
                 opacity=0.8,
                 text=pattern_description, 
@@ -248,6 +352,10 @@ def Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma):
     fig.add_trace(short_ma_trace, row=1, col=1)
     fig.add_trace(medium_ma_trace, row=1, col=1)
     fig.add_trace(long_ma_trace, row=1, col=1)
+    fig.add_trace(linear_regression_trace, row=1, col=1)
+    fig.add_trace(future_linear_regression_trace, row=1, col=1)
+    fig.add_trace(upper_band_trace, row=1, col=1)
+    fig.add_trace(lower_band_trace, row=1, col=1)
 
     for pattern_trace in pattern_traces:
         fig.add_trace(pattern_trace, row=2, col=1)
@@ -265,7 +373,7 @@ def Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma):
         plot_bgcolor='black',
         paper_bgcolor='black',
         font=dict(color='#FFFFFF'),
-        height=800,
+        height=900,
         width=1300,
         legend=dict(orientation='h', y=1.1),
         hovermode='x unified',
@@ -291,7 +399,7 @@ def Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma):
     ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center'})
     return div
 
-
+#Volume chart
 def sub_plot(data, stock_name, rangebreaks):
     volume_trace = go.Bar(
         
@@ -326,7 +434,7 @@ def sub_plot(data, stock_name, rangebreaks):
     ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center','border': '1px solid white'})
 )
 
-
+# Rsi( Relative Strength Index) Chart 
 def Rsi( stock_name, rangebreaks,yf_data,period,interval_time):
     if period=="1D":
         period="1y"
@@ -381,11 +489,14 @@ def Rsi( stock_name, rangebreaks,yf_data,period,interval_time):
 
     return html.Div(
         html.Div([
-            html.H3("RSI", style={'textAlign': 'center', 'color': 'white'}),
+            html.H3("RSI (Relative Strength Index)", style={'textAlign': 'center', 'color': 'white'}),
+            
             dcc.Graph(id='data-chart', figure=fig)
         ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center','border': '1px solid white'})
     )
 
+
+# Macd(Moving Average Convergence Divergence) Chart
 def macd( stock_name, rangebreaks,period,interval_time,yf_data):
     if period=="1D":
         period="1y"
@@ -453,12 +564,13 @@ def macd( stock_name, rangebreaks,period,interval_time,yf_data):
 
     return html.Div(
         html.Div([
-            html.H3("MACD", style={'textAlign': 'center', 'color': 'white'}),
+            html.H3("MACD (Moving Average Convergence Divergence)", style={'textAlign': 'center', 'color': 'white'}),
             dcc.Graph(id='data-chart', figure=fig)
         ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center','border': '1px solid white'})
     )
 
 
+# DMI (Directional Movement Index) and ADX (Average Directional Index)
 def dmi_adx( stock_name, rangebreaks,period,interval_time,yf_data):
     if period=="1D":
         period="6mo"
@@ -529,11 +641,12 @@ def dmi_adx( stock_name, rangebreaks,period,interval_time,yf_data):
 
     return html.Div(
         html.Div([
-            html.H3("DMI and ADX", style={'textAlign': 'center', 'color': 'white'}),
+            html.H3("DMI (Directional Movement Index) and ADX (Average Directional Index)", style={'textAlign': 'center', 'color': 'white'}),
             dcc.Graph(id='data-chart', figure=fig)
         ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center','border': '1px solid white'})
     )
 
+# Atr(Average True Range) chart
 def Atr(stock_name, rangebreaks,period,interval_time,yf_data):
     if period=="1D":
         period="6mo"
@@ -584,12 +697,12 @@ def Atr(stock_name, rangebreaks,period,interval_time,yf_data):
 
     return html.Div(
         html.Div([
-            html.H3("ATR", style={'textAlign': 'center', 'color': 'white'}),
+            html.H3("ATR (Average True Range)", style={'textAlign': 'center', 'color': 'white'}),
             dcc.Graph(id='data-chart', figure=fig)
         ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center','border': '1px solid white'})
     )
     
-
+# Roc(Rate of Change) Chart
 def Roc(stock_name, rangebreaks,period,interval_time,yf_data):
     if period=="1D":
         period="6mo"
@@ -640,11 +753,13 @@ def Roc(stock_name, rangebreaks,period,interval_time,yf_data):
 
     return html.Div(
         html.Div([
-            html.H3("ROC", style={'textAlign': 'center', 'color': 'white'}),
+            html.H3("ROC (Rate of Change)", style={'textAlign': 'center', 'color': 'white'}),
             dcc.Graph(id='data-chart', figure=fig)
         ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center','border': '1px solid white'})
     )
     
+
+# bolling bbdas    
 def bollinger_bbdas(data, rangebreaks, period, interval_time, yf_data):
     if period == "1D":
         period = "6mo"
@@ -702,23 +817,6 @@ def bollinger_bbdas(data, rangebreaks, period, interval_time, yf_data):
     )
 
 
-def create_earnings_table(earnings_data):
-    earnings_df = pd.DataFrame.from_dict(earnings_data)
-    earnings_table = html.Div([
-        html.H3("Earnings Table", style={'textAlign': 'center', 'color': 'white'}),  
-        html.Table([
-            html.Thead(
-                html.Tr([html.Th(col) for col in earnings_df.columns])
-            ),
-            html.Tbody([
-                html.Tr([
-                    html.Td(earnings_df.iloc[i][col], style={'color': 'white'}) for col in earnings_df.columns
-                ]) for i in range(len(earnings_df))
-            ])
-        ])
-    ])
-    return earnings_table
-
     
 
 def create_news_table(news_data):
@@ -733,7 +831,9 @@ def create_news_table(news_data):
         ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center'})
     )
 
-    
+
+   
+
 @app.callback(
     Output('output-container-button', 'children'),
     [Input('submit-val', 'n_clicks')],
@@ -743,10 +843,17 @@ def create_news_table(news_data):
      State('interval_time', 'value'),
      State('short-ma-input', 'value'),  
      State('medium-ma-input', 'value'),
-     State('long-ma-input', 'value')
+     State('long-ma-input', 'value'),
+     State('Linear-input', 'value')
+
     ],
 )
-def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_ma, long_ma):
+
+
+        
+
+# Main Function
+def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_ma, long_ma,Linear_input):
     try:
         if n_clicks:
             full_stock_name = value + radio_value
@@ -759,23 +866,23 @@ def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_
                 stock_name=full_stock_name[:-3]
             else:
                 stock_name=full_stock_name
-                
-           
+
+            future_days = Linear_input  
 
             data = yf_data.fetch_stock_data(period=period, interval=interval_time)
             rangebreaks = get_range_breaks(data)
-            candle_chart = Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma)
+            candle_chart = Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma,future_days)
             stock_info = display_stock_info(info, yf_data, period, full_stock_name)  
             Sub_plot = sub_plot(data, stock_name, rangebreaks)
             rsi = Rsi(stock_name, rangebreaks, yf_data, period, interval_time)
             Mcd = macd(stock_name, rangebreaks, period, interval_time, yf_data)
             Rock = Roc(stock_name, rangebreaks, period, interval_time, yf_data)
             earnings = yf_data.stock_earning_date() 
-            earnings_table = create_earnings_table(earnings)
             Dmi_Adx = dmi_adx(stock_name, rangebreaks, period, interval_time, yf_data)  
             atr = Atr(stock_name, rangebreaks, period, interval_time, yf_data)  
             news = yf_data.stock_news()
             news_table = create_news_table(news)
+            boling= bollinger_bbdas(data, rangebreaks, period, interval_time, yf_data)
 
            
 
@@ -786,16 +893,17 @@ def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_
                 rsi,
                 Mcd,
                 Dmi_Adx,
+                boling,
                 atr,
                 Rock,
                 news_table,
-               
+
             ], style={'display': 'flex', 'flex-direction': 'column', 'align-items': 'center'})
     except Exception as e:
         error_message = str(e)
         return html.Div(f"An error occurred: {error_message}")
 
-
+#rang breaker
 def get_range_breaks(data):
     date_series = pd.Series(data.index)
     gaps = date_series[date_series.diff() > pd.Timedelta(days=1)]
@@ -812,46 +920,6 @@ def get_range_breaks(data):
         )
     
     return rangebreaks
-
-@app.callback(
-    Output('Live_Price', 'children'),
-    [Input('submit-val', 'n_clicks')],
-    [Input('interval-component', 'n_intervals')],
-    [State('text-input', 'value'),
-     State('radio-items', 'value')]
-)
-def update_stock_price(n_clicks, n_intervals, value, radio_value):
-    try:
-        full_stock_name = value + radio_value
-        historical_data = yf.download(full_stock_name, period='2d')  
-        if len(historical_data) >= 2:
-            yesterday_close = historical_data['Close'].iloc[-2]  
-            today_close = historical_data['Close'].iloc[-1] 
-
-            if today_close > yesterday_close:
-                color = 'green'
-            elif today_close < yesterday_close:
-                color = 'red'
-            else:
-                color = 'white' 
-
-            percentage_change = ((today_close - yesterday_close) / yesterday_close) * 100
-
-            if percentage_change > 0:
-                change_text = f"+{percentage_change:.2f}%"
-            elif percentage_change < 0:
-                change_text = f"{percentage_change:.2f}%"
-            else:
-                change_text = "(0%)"
-
-            live_price_text = html.Div(f'Price: {today_close} ({change_text})', style={'color': color, 'text-align': 'center', 'font-size': '24px'})
-            return live_price_text
-        else:
-            return html.Div(f'Price: N/A', style={'color': 'white', 'text-align': 'center', 'font-size': '24px'})
-    except Exception as e:
-        error_message = str(e)
-        return html.Div(f"An error occurred: {error_message}")
-
 
 if __name__ == '__main__':
     app.run_server(debug=True)
