@@ -15,6 +15,7 @@ import time
 from stocks_names import stocks_names
 
 app = Dash(__name__)
+app.title="Stock"
 
 start_time = datetime.time(9, 15)
 end_time = datetime.time(15, 30)
@@ -235,7 +236,20 @@ from datetime import datetime, timedelta
 def Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma, future_days):
     title_html = stock_name
     company_logo_url = f"https://logo.clearbit.com/{stock_name}.com"
-
+    if short_ma ==0:
+        short_ma=1
+    else:
+        short_ma
+    if medium_ma==0:
+        medium_ma=1
+    else:
+        medium_ma
+    if long_ma==0:
+        long_ma=1
+    else:
+        long_ma
+    
+    
     data = Talib.calculate_moving_averages(data, short_ma, medium_ma, long_ma)
     data = Talib.handle_candle_pattern(data)
 
@@ -244,12 +258,18 @@ def Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma, fu
     reg = LinearRegression().fit(X, y)
     linear_regression_line = reg.predict(X)
 
+    if future_days ==0:
+        future_days=1
+    else:
+        future_days
+
+
     future_X = np.arange(len(data), len(data) + future_days).reshape(-1, 1)
     future_linear_regression_line = reg.predict(future_X)
 
-    std_dev = data['Close'].rolling(window=20).std()
-    upper_band = linear_regression_line.flatten() + 2 * std_dev
-    lower_band = linear_regression_line.flatten() - 2 * std_dev
+    # std_dev = data['Close'].rolling(window=20).std()
+    # upper_band = linear_regression_line.flatten() + 2 * std_dev
+    # lower_band = linear_regression_line.flatten() - 2 * std_dev
 
     candle_trace = go.Candlestick(
         x=data.index,
@@ -259,7 +279,7 @@ def Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma, fu
         close=data['Close'],
         name='Candlestick'
     )
-
+ 
     short_ma_trace = go.Scatter(
         x=data.index,
         y=data['Short MA'],
@@ -267,7 +287,7 @@ def Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma, fu
         name=f'Short MA({short_ma})',
         line=dict(color='blue')
     )
-
+    
     medium_ma_trace = go.Scatter(
         x=data.index,
         y=data['Medium MA'],
@@ -300,21 +320,21 @@ def Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma, fu
         line=dict(color='Cyan', dash='dash')
     )
 
-    upper_band_trace = go.Scatter(
-        x=data.index,
-        y=upper_band,
-        mode='lines',
-        name='Upper Band',
-        line=dict(color='green', dash='dash')
-    )
+    # upper_band_trace = go.Scatter(
+    #     x=data.index,
+    #     y=upper_band,
+    #     mode='lines',
+    #     name='Upper Band',
+    #     line=dict(color='green', dash='dash')
+    # )
 
-    lower_band_trace = go.Scatter(
-        x=data.index,
-        y=lower_band,
-        mode='lines',
-        name='Lower Band',
-        line=dict(color='red', dash='dash')
-    )
+    # lower_band_trace = go.Scatter(
+    #     x=data.index,
+    #     y=lower_band,
+    #     mode='lines',
+    #     name='Lower Band',
+    #     line=dict(color='red', dash='dash')
+    # )
 
     pattern_colors = ['Orange', 'Cyan', 'Fuchsia', 'red', 'SpringGreen', 'yellow', 'Chartreuse', 'magenta']  
     start_index = 3
@@ -354,8 +374,8 @@ def Candle_chart(data, stock_name, rangebreaks, short_ma, medium_ma, long_ma, fu
     fig.add_trace(long_ma_trace, row=1, col=1)
     fig.add_trace(linear_regression_trace, row=1, col=1)
     fig.add_trace(future_linear_regression_trace, row=1, col=1)
-    fig.add_trace(upper_band_trace, row=1, col=1)
-    fig.add_trace(lower_band_trace, row=1, col=1)
+    # fig.add_trace(upper_band_trace, row=1, col=1)
+    # fig.add_trace(lower_band_trace, row=1, col=1)
 
     for pattern_trace in pattern_traces:
         fig.add_trace(pattern_trace, row=2, col=1)
@@ -867,6 +887,7 @@ def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_
             else:
                 stock_name=full_stock_name
 
+
             future_days = Linear_input  
 
             data = yf_data.fetch_stock_data(period=period, interval=interval_time)
@@ -884,7 +905,7 @@ def stock(n_clicks, value, radio_value, period, interval_time, short_ma, medium_
             news_table = create_news_table(news)
             boling= bollinger_bbdas(data, rangebreaks, period, interval_time, yf_data)
 
-           
+
 
             return html.Div([
                 stock_info,
