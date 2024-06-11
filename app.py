@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 import time
 from stocks_names import stocks_names
 app = Dash(__name__)
-server-app.server
+server=app.server
 
 app.title="Stock"
 
