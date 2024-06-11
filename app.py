@@ -13,7 +13,7 @@ import requests
 from bs4 import BeautifulSoup
 import time
 from stocks_names import stocks_names
-
+server= app.server
 app = Dash(__name__)
 app.title="Stock"
 
