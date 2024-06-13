@@ -42,3 +42,4 @@ Werkzeug==3.0.1
 yfinance==0.2.37
 zipp==3.17.0
 ta-lib==0.4.19
+pandas_ta==0.3.14b0
