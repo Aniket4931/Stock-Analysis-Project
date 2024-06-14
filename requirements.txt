@@ -43,4 +43,4 @@ yfinance==0.2.37
 zipp==3.17.0
 pandas_ta==0.3.14b0
 gunicorn
-sklearn
+scikit-learn==1.2.2
