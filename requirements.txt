@@ -41,5 +41,4 @@ webencodings==0.5.1
 Werkzeug==3.0.1
 yfinance==0.2.37
 zipp==3.17.0
-ta-lib
 pandas_ta==0.3.14b0
