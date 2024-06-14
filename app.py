@@ -3,7 +3,6 @@ from dash import Dash, html, dcc, Input, Output, State
 from yfinance_data import Yfinance
 import pandas as pd
 import plotly.graph_objs as go
-from talib import RSI
 from ta_lib_utility import Talib
 import plotly.subplots as sp
 import yfinance as yf
