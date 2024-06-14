@@ -13,11 +13,10 @@ import requests
 from bs4 import BeautifulSoup
 import time
 from stocks_names import stocks_names
+
 app = Dash(__name__)
-server=app.server
-
 app.title="Stock"
-
+server=app.server
 start_time = datetime.time(9, 15)
 end_time = datetime.time(15, 30)
 now = datetime.datetime.now().time()
